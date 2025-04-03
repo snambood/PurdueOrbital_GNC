@@ -1,9 +1,9 @@
 # Model Predictive Contorl
-To develop this code we will use the do_mpc package in python.
+To develop this code we will use the do_mpc package in python. CasADi is a non linear solver that is open source 
 
 # Implementation
 ## Dynamics
-This rocket passes through both the subsonic and transonic region.
+This rocket passes through both the subsonic and transonic region. This is a real issue as an MPC requires a well defined dynamics which is difficult to predict in the transonic region. While other controllers like an extremum based controller would be better for the robustness of such a system, we will try to use an MPC or an adaptive MPC as it is easier to implement. 
 
 For the supersonic dynamics we use:
 Milne, B., Samson, S., Carrese, R., Gardi, A., & Sabatini, R. (2023). High-Fidelity Dynamics Modelling for the Design of a High-Altitude Supersonic Sounding Rocket. Designs, 7(1), 32. https://doi.org/10.3390/designs7010032 

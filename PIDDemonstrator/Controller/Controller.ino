@@ -6,6 +6,8 @@
 
 #define PI (3.14159265358979)
 
+// SDA to A4
+// SCL to A5
 // bno055 setup
 
 Adafruit_BNO055 bno = Adafruit_BNO055(55);

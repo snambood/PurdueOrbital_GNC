@@ -1,5 +1,5 @@
 # Model Predictive Contorl
-To develop this code we will use the do_mpc package in python. CasADi is a non linear solver that is open source 
+To develop this code we will use the do_mpc package in python. CasADi is a non linear solver that is open source. MATLAB has mutliple videos on MPC, how it works, and examples in Simulink. You can find part 1 of the MPC video series at https://youtu.be/8U0xiOkDcmw.
 
 # Implementation
 ## Dynamics

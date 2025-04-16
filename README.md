@@ -6,7 +6,7 @@ Date of repo creation: 03/31/2025
 Authors:
 - Shashank Namboodiri (snambood@purdue.edu)
 - Jason Wang ()
-- Ryan Krause
+- Ryan Krause (krause65@purdue.edu)
 - Vivian Sattler
 
 # What is the problem we are trying to solve

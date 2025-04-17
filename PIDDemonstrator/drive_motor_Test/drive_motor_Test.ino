@@ -17,7 +17,12 @@
 
 Adafruit_BNO055 bno = Adafruit_BNO055(55);
 
+// Create and instance of the stepper motor
 AccelStepper stepper = AccelStepper(motorInterfaceType, stepPin, dirPin);
+
+double inte = 0; // integral assignment
+double old_error = 0; //old error assignment
+double old_time
 
 void setup(void) 
 {
@@ -39,12 +44,12 @@ void setup(void)
   double kP = 10;
   double kI = 0;
   double kD = 1.6248;
-  double inte = 0; //double integral assignment
-  double old_error = 0; //old error assignment
   double setpoint = 0;
-  double dt = .01;
+  double old_time = millis();
   double integral_clipping = 3; // max integral value
   double error = 0;
+
+  current_time = millis()
 
   stepper.setMaxSpeed(1000);
   stepper.setAcceleration(50000);
@@ -53,29 +58,16 @@ void setup(void)
 
 void loop(void) 
 {
-  /* Get a new sensor event */ 
-  sensors_event_t orientationData; 
-  sensors_event_t angVelocityData;
-  bno.getEvent(&orientationData, Adafruit_BNO055::VECTOR_EULER);
-  bno.getEvent(&angVelocityData, Adafruit_BNO055::VECTOR_GYROSCOPE);
-  
   // rotational position in rad
   // angular velocity in rad/s
+  double x = get_ang_position();
+  double vx = get_ang_velocity();
 
-  double x = 0;
-  double vx = 0;
-
-  x = orientationData.orientation.x;
-  x = x * (PI / 180.0);
-  vx = angVelocityData.gyro.x;
-
-  Serial.print("x:");
-  Serial.print(x);
-  Serial.print(",");
-  Serial.print("vx:");
-  Serial.print(vx);
-
+  print_ang_vel(x, vx);
+  
   error = x - setpoint;
+  double dt = millis() - old_time; // This is in milliseconds
+  dt /= 1000;                      // Convert to seconds
   inte += error * dt;
   u = kP * error + kI * inte + kD * ((error - old_error)/dt);
 
@@ -93,18 +85,87 @@ void loop(void)
   
   inte = constrain(inte, -integral_clipping, integral_clipping);
   double out_vel = kP * wrapped_x + kI * inte + kD * vx;
-  Serial.print(",");
-  Serial.print("PID vel:");
-  Serial.println(out_vel);
-  
-  
 
+
+  print_PID(out_vel)
+
+  drive_motor(out_vel) 
+  
+  old_time = millis()
   delay(100);
 }
 
+/*
+This function uses the AdaFriut library to get the orientation data
+  Arguments:
+    None
+  
+  Output:
+    (double) angular velocity in radians / s
+*/
+double get_ang_velocity(void){
+  sensors_event_t angVelocityData; 
+  bno.getEvent(&angVelocityData, Adafruit_BNO055::VECTOR_EULER);
+
+  return(angVelocityData.gyro.x)
+}
+
+/*
+This function uses the AdaFriut library to get the orientation data
+  Arguments:
+    None
+  
+  Output:
+    (double) angular orientation in radians
+*/
+double get_ang_position(void){
+  sensors_event_t orientationData; 
+  bno.getEvent(&orientationData, Adafruit_BNO055::VECTOR_EULER);
+
+  x = orientationData.orientation.x;
+  x = x * (PI / 180.0);
+
+  return(x)
+}
+
+/*
+This function prints position and velocity to the serial monitor
+  Arguments:
+    (double) Current Angular Position
+    (double) Current Angular Velocity
+  
+  Output:
+    None
+*/
+void print_ang_vel(double position, double velocity){
+  Serial.print("Current Position:");
+  Serial.print(position);
+  Serial.print(" rad, Current Velocity: ");
+  Serial.print(velocity);
+  Serial.print(" rad/s")
+}
+
+
+/*
+This function prints the PID output and returns to next line
+  Arguments:
+    (double) PID velocity
+  
+  Output:
+    None
+*/
+void print_PID(double vel){
+  Serial.print(" , PID vel: ");
+  Serial.print(vel);
+  Serial.println(" m/s")
+}
+
+/*
+This function runs the motor at a given velocity
+*/
 void drive_motor(double vel)
 {
-  if ((vel <= speedCap) && (vel >= 0)) {
-    speed += vel;
-
+  stepper.setSpeed(speed);
+  stepper.runSpeed();
 }
+

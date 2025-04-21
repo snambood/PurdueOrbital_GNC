@@ -11,161 +11,130 @@
 #define motorInterfaceType 1
 #define speedCap (1000)
 
-// SDA to A4
-// SCL to A5
-// bno055 setup
-
 Adafruit_BNO055 bno = Adafruit_BNO055(55);
-
-// Create and instance of the stepper motor
 AccelStepper stepper = AccelStepper(motorInterfaceType, stepPin, dirPin);
 
-double inte = 0; // integral assignment
-double old_error = 0; //old error assignment
-double old_time
+// PID gains
+double kP = 10;
+double kI = 0.5;
+double kD = 1.6248;
+double setpoint = 0;
+
+// Integral control
+double inte = 0;
+double integral_clipping = 3;
+double windup_decay = 0.9;
+
+// Low-pass filter
+double alpha = 0.8;
+double filtered_vx = 0;
+
+// Memory
+double old_error = 0;
+double old_time = 0;
 
 void setup(void) 
 {
   Serial.begin(9600);
-  Serial.println("Orientation Sensor Test"); Serial.println("");
-  
-  /* Initialize the sensor */
-  if(!bno.begin())
-  {
-    /* There was a problem detecting the BNO055 ... check your connections */
+  Serial.println("Orientation Sensor Test\n");
+
+  if (!bno.begin()) {
     Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
-    while(1);
+    while (1);
   }
-  
+
   delay(1000);
-    
   bno.setExtCrystalUse(true);
 
-  double kP = 10;
-  double kI = 0;
-  double kD = 1.6248;
-  double setpoint = 0;
-  double old_time = millis();
-  double integral_clipping = 3; // max integral value
-  double error = 0;
+  old_time = millis();
 
-  current_time = millis()
-
-  stepper.setMaxSpeed(1000);
+  stepper.setMaxSpeed(speedCap);
   stepper.setAcceleration(50000);
+  stepper.runToPosition(200)
 }
-
 
 void loop(void) 
 {
-  // rotational position in rad
-  // angular velocity in rad/s
   double x = get_ang_position();
   double vx = get_ang_velocity();
 
-  print_ang_vel(x, vx);
-  
-  error = x - setpoint;
-  double dt = millis() - old_time; // This is in milliseconds
-  dt /= 1000;                      // Convert to seconds
-  inte += error * dt;
-  u = kP * error + kI * inte + kD * ((error - old_error)/dt);
+  // Apply low-pass filter
+  filtered_vx = alpha * filtered_vx + (1 - alpha) * vx;
 
-  /*double wrapped_x = fmod(x - setpoint, 2 * PI);
-  if (wrapped_x > PI) {
-    wrapped_x -= 2*PI;
+  // Wrap error between [-PI, PI]
+  double error = wrap_angle(x - setpoint);
+
+  double dt = (millis() - old_time) / 1000.0;
+  old_time = millis();
+
+  // Integral update with decay
+  if (abs(error) < 0.05) {  // Only decay if near setpoint
+    inte *= windup_decay;
+  } else {
+    inte += error * dt;
   }
-  else if (wrapped_x < -PI) {
-    wrapped_x += 2*PI;
-  }
 
-  inte += wrapped_x * dt;*/
-
-  // arb clipping
-  
+  // Integral clipping
   inte = constrain(inte, -integral_clipping, integral_clipping);
-  double out_vel = kP * wrapped_x + kI * inte + kD * vx;
 
+  double u = kP * error + kI * inte - kD * filtered_vx;  // Note: using -D*v
 
-  print_PID(out_vel)
+  double out_vel = constrain(u, -speedCap, speedCap);
 
-  drive_motor(out_vel) 
-  
-  old_time = millis()
+  // Debug prints
+  Serial.print("Error: ");
+  Serial.print(error);
+  Serial.print(" rad, u: ");
+  Serial.print(u);
+  Serial.print(" , dt: ");
+  Serial.print(dt);
+  Serial.print(" , Filtered Vx: ");
+  Serial.println(filtered_vx);
+
+  print_ang_vel(x, vx);
+  print_PID(out_vel);
+  drive_motor(out_vel);
+
+  old_error = error;
+
   delay(100);
 }
 
-/*
-This function uses the AdaFriut library to get the orientation data
-  Arguments:
-    None
-  
-  Output:
-    (double) angular velocity in radians / s
-*/
 double get_ang_velocity(void){
   sensors_event_t angVelocityData; 
   bno.getEvent(&angVelocityData, Adafruit_BNO055::VECTOR_EULER);
-
-  return(angVelocityData.gyro.x)
+  return angVelocityData.gyro.x;
 }
 
-/*
-This function uses the AdaFriut library to get the orientation data
-  Arguments:
-    None
-  
-  Output:
-    (double) angular orientation in radians
-*/
 double get_ang_position(void){
   sensors_event_t orientationData; 
   bno.getEvent(&orientationData, Adafruit_BNO055::VECTOR_EULER);
-
-  x = orientationData.orientation.x;
-  x = x * (PI / 180.0);
-
-  return(x)
+  double x = orientationData.orientation.x;
+  return x * (PI / 180.0); // convert degrees to radians
 }
 
-/*
-This function prints position and velocity to the serial monitor
-  Arguments:
-    (double) Current Angular Position
-    (double) Current Angular Velocity
-  
-  Output:
-    None
-*/
 void print_ang_vel(double position, double velocity){
-  Serial.print("Current Position:");
+  Serial.print("Current Position: ");
   Serial.print(position);
   Serial.print(" rad, Current Velocity: ");
   Serial.print(velocity);
-  Serial.print(" rad/s")
+  Serial.println(" rad/s");
 }
 
-
-/*
-This function prints the PID output and returns to next line
-  Arguments:
-    (double) PID velocity
-  
-  Output:
-    None
-*/
 void print_PID(double vel){
-  Serial.print(" , PID vel: ");
+  Serial.print("PID vel: ");
   Serial.print(vel);
-  Serial.println(" m/s")
+  Serial.println(" m/s");
 }
 
-/*
-This function runs the motor at a given velocity
-*/
-void drive_motor(double vel)
-{
-  stepper.setSpeed(speed);
+void drive_motor(double vel){
+  stepper.setSpeed(vel);
   stepper.runSpeed();
 }
 
+// Angle wrapping between [-PI, PI]
+double wrap_angle(double theta) {
+  while (theta > PI)  theta -= 2 * PI;
+  while (theta < -PI) theta += 2 * PI;
+  return theta;
+}

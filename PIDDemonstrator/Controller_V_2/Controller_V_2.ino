@@ -9,15 +9,15 @@
 #define dirPin 2
 #define stepPin 3
 #define motorInterfaceType 1
-#define speedCap (100000)
+#define speedCap (500)
 
 Adafruit_BNO055 bno = Adafruit_BNO055(55);
 AccelStepper stepper = AccelStepper(motorInterfaceType, stepPin, dirPin);
 
 // PID gains
-double kP = 100000;
-double kI = 0.0;
-double kD = 0.0;
+double kP = -2000;
+double kI = -200.0;
+double kD = -50.0;
 double setpoint = 0;
 
 // Integral control
@@ -25,13 +25,11 @@ double inte = 0;
 double integral_clipping = 3;
 double windup_decay = 0.9;
 
-// Low-pass filter
-double alpha = 0.8;
-double filtered_vx = 0;
 
 // Memory
 double old_error = 0;
 double old_time = 0;
+double old_position = 0; 
 
 void setup(void) 
 {
@@ -56,19 +54,17 @@ void setup(void)
 void loop(void) 
 {
   double x = get_ang_position();
-  double vx = get_ang_velocity();
-
-  // Apply low-pass filter
-  filtered_vx = alpha * filtered_vx + (1 - alpha) * vx;
 
   // Wrap error between [-PI, PI]
   double error = wrap_angle(x - setpoint);
 
   double dt = (millis() - old_time) / 1000.0;
   old_time = millis();
+  double vx = (x - old_position)/dt;
+  old_position = x;
 
   // Integral update with decay
-  if (abs(error) < 0.05) {  // Only decay if near setpoint
+  if (abs(error) < 0.2) {  // Only decay if near setpoint
     inte *= windup_decay;
   } else {
     inte += error * dt;
@@ -77,18 +73,16 @@ void loop(void)
   // Integral clipping
   inte = constrain(inte, -integral_clipping, integral_clipping);
 
-  double u = kP * error + kI * inte - kD * filtered_vx;  // Note: using -D*v
+  double u = kP * error + kI * inte - kD * vx;  // Note: using -D*v
 
   double out_vel = constrain(u, -speedCap, speedCap);
 
-
-  print_ang_vel(x, vx);
+  print_ang_vel(error, x, vx);
   print_PID(out_vel);
   drive_motor(out_vel);
 
   old_error = error;
 
-  delay(100);
 }
 
 double get_ang_velocity(void){
@@ -104,9 +98,11 @@ double get_ang_position(void){
   return x * (PI / 180.0); // convert degrees to radians
 }
 
-void print_ang_vel(double position, double velocity){
+void print_ang_vel(double error, double position, double velocity){
   Serial.print("Current Position: ");
   Serial.print(position);
+  Serial.print(" rad, Current Error: ");
+  Serial.print(error);
   Serial.print(" rad, Current Velocity: ");
   Serial.print(velocity);
   Serial.print(" rad/s  ");
@@ -115,14 +111,18 @@ void print_ang_vel(double position, double velocity){
 void print_PID(double vel){
   Serial.print("PID vel: ");
   Serial.print(vel);
-  Serial.println(" m/s");
+  Serial.println(" ");
 }
 
-void drive_motor(double vel){
-  stepper.setSpeed(vel);
-  stepper.runSpeed();
-  delay(50)
+void drive_motor(double vel) {
+  stepper.setSpeed(vel); // speed in steps per second
+
+  unsigned long time_rn = millis();
+  while (millis() - time_rn < 100) { // run for 100 ms
+    stepper.runSpeed(); // this runs the motor at constant speed
+  }
 }
+
 
 // Angle wrapping between [-PI, PI]
 double wrap_angle(double theta) {
